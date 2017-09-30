@@ -30,6 +30,7 @@
     height = 400;
 
     duration = 1000;
+        
     // create svg variable
     var svg = d3.select("body").append("svg")
                     .attr("width", width)
@@ -38,7 +39,7 @@
     d3.select("body").append("input")
     .attr("type", "range")
     .attr("min", 0)
-    .attr("max", 500)
+    .attr("max", 5000)
     .attr("value", duration)
     .attr("class", "slider")
     .on("change", function() { duration = this.value; });
@@ -60,12 +61,33 @@
     d3.csv("CountryGeo.csv", countryLine, function(error,data){
         countryData = data;
         countryData.forEach(function(d){
-            countryGeo[d.country] = {lat: d.latitude, long: d.longitude, time: [], avgTemp: [], uncertainty: []}
+            countryGeo[d.country] = {lat: d.latitude, long: d.longitude, time: [], avgTemp: [], uncertainty: [], area: 0}
         });
         allC = Object.keys(countryGeo)
     });
-    
         
+    // Surface area data used for radius
+        
+    var surfaceArea = {};
+    function surfaceLine(line){
+        return{
+        country: line["Country Name"],
+        surfaceA: Number(line["Surface Area"])
+            
+        };
+    }
+        
+    xScale = d3.scaleLinear()
+    .domain( [0,10000000] )
+    .range( [5,30] );
+        
+     d3.csv("SurfaceAreaByCountry.csv", surfaceLine, function(error,data){
+        sa = data;
+        sa.forEach(function(d){
+            surfaceArea[d.country] = {area: d.surfaceA};
+        });
+    });
+                
     /////////////////////////////////////////////
     // Store country temperature data and join with coordinate data
         
@@ -88,8 +110,13 @@
             c = String(d.country);
             countryGeo[c].avgTemp = countryGeo[c].avgTemp.concat([d.avgTemp]);
             countryGeo[c].time = countryGeo[c].time.concat([d.timeFrame]);
-            countryGeo[c].uncertainty = countryGeo[c].uncertainty.concat([d.tempUncertainty]);
+            countryGeo[c].uncertainty = countryGeo[c].uncertainty.concat([d.tempUncertainty])
+            var aVal = surfaceArea[c];
+            if (aVal  != undefined){
+            countryGeo[c].area = aVal.area;
+            }
         });
+            
         
         for (var c in countryGeo) {
             countryMap.push(countryGeo[c])
@@ -100,7 +127,7 @@
         var projection = d3.geoMercator();
 
         // set projection parameters
-        projection.scale(60)
+        projection.scale(80)
         .translate([width / 2, height / 2]);
         
         
@@ -110,7 +137,6 @@
         .append("circle")
         .attr("class", "circle")
         .attr("cx",function(c){
-            console.log(c)
             var long = c.long;
             var lat = c.lat;
             return projection([long,lat])[0] })
@@ -118,7 +144,10 @@
             var long = c.long;
             var lat = c.lat;
             return projection([long,lat])[1] })
-        .attr("r", 6)
+        .attr("r", function(c){
+            var val = xScale(c.area);
+            return val
+        })
         .attr("fill", function(c){
             var t = c.avgTemp;
             var color;
@@ -140,6 +169,11 @@
             }
         })
         
+        time = countryMap[0].time[i]
+        svg.append("text")
+        .text(time)
+        .attr("x", 50)
+        .attr("y", 50)
         
         
         update(0);
@@ -149,7 +183,10 @@
         
     })
     
-
+    # Wrong not consecutive years
+    get array of all dates
+    think about the data - maybe 6 intervals (12, 34, 56, 78, 910,1112) (?)
+                                    
 
     function update(year){
             
@@ -175,7 +212,11 @@
                 return 0.8;
             }
         })
-            
+        
+        time = countryMap[0].time[year]
+        
+        svg.selectAll("text")
+        .text(time);
             
         }
         
