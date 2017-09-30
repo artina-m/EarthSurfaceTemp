@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Earth Surface Temperature</title>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=Roboto:Bold,Thin,Regular');
+        #boroughs {
+            stroke: #272727;
+            stroke-width: 2px;
+            fill: #111011;
+        }   
+        #maps { white-space: nowrap; }
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .visualization {
+            width: 1000px;
+            height:1000px;
+            background: white;
+    </style>
+</head>
+    
+<body>
+<div class = "viz">
+    <script>
+        
+    var width = 600,
+    height = 400;
+
+    duration = 1000;
+    // create svg variable
+    var svg = d3.select("body").append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+        
+    d3.select("body").append("input")
+    .attr("type", "range")
+    .attr("min", 0)
+    .attr("max", 500)
+    .attr("value", duration)
+    .attr("class", "slider")
+    .on("change", function() { duration = this.value; });
+
+    // Store country and coordinate data in object
+    var countryData;
+    var countryGeo = {};
+    var allC;  
+    
+    function countryLine(line) {
+        return {
+            
+        country: line["name"],
+        latitude: Number(line["latitude"]),
+        longitude: Number(line["longitude"]),
+    };
+    }
+        
+    d3.csv("CountryGeo.csv", countryLine, function(error,data){
+        countryData = data;
+        countryData.forEach(function(d){
+            countryGeo[d.country] = {lat: d.latitude, long: d.longitude, time: [], avgTemp: [], uncertainty: []}
+        });
+        allC = Object.keys(countryGeo)
+    });
+    
+        
+    /////////////////////////////////////////////
+    // Store country temperature data and join with coordinate data
+        
+    var tempData;
+    var countryMap = [];
+
+        function parseLine(line) {
+        return {
+            
+        timeFrame: line["dt"],
+        avgTemp: Number(line["AverageTemperature"]),
+        tempUncertainty: Number(line["AverageTemperatureUncertainty"]),
+        country: line["Country"]
+    };
+    }
+        
+    d3.csv("globalData.csv", parseLine, function(error,data){
+        tempData = data;
+        tempData.forEach(function(d){
+            c = String(d.country);
+            countryGeo[c].avgTemp = countryGeo[c].avgTemp.concat([d.avgTemp]);
+            countryGeo[c].time = countryGeo[c].time.concat([d.timeFrame]);
+            countryGeo[c].uncertainty = countryGeo[c].uncertainty.concat([d.tempUncertainty]);
+        });
+        
+        for (var c in countryGeo) {
+            countryMap.push(countryGeo[c])
+        }        
+        
+        i = 28
+        // set projection
+        var projection = d3.geoMercator();
+
+        // set projection parameters
+        projection.scale(60)
+        .translate([width / 2, height / 2]);
+        
+        
+        svg.selectAll("circle")
+        .data(countryMap)
+        .enter()
+        .append("circle")
+        .attr("class", "circle")
+        .attr("cx",function(c){
+            console.log(c)
+            var long = c.long;
+            var lat = c.lat;
+            return projection([long,lat])[0] })
+        .attr("cy",function(c){
+            var long = c.long;
+            var lat = c.lat;
+            return projection([long,lat])[1] })
+        .attr("r", 6)
+        .attr("fill", function(c){
+            var t = c.avgTemp;
+            var color;
+            if (i > t.length){
+                return "white";
+            }
+            else {
+                return colorMe(t[i]);
+            }
+        })
+        .attr("opacity", function(c){
+            var t = c.avgTemp;
+            var color;
+            if (i > t.length){
+                return 0;
+            }
+            else {
+                return 0.8;
+            }
+        })
+        
+        
+        
+        update(0);
+        d3.select(".slider").on("input", function() {
+            update(+this.value);
+         });
+        
+    })
+    
+
+
+    function update(year){
+            
+        svg.selectAll(".circle")
+            .data(countryMap)
+            .attr("fill", function(c){
+            var t = c.avgTemp;
+            var color;
+            if (year > t.length){
+                return "white";
+            }
+            else {
+                return colorMe(t[year]);
+            }
+        })
+        .attr("opacity", function(c){
+            var t = c.avgTemp;
+            var color;
+            if (year >= t.length){
+                return 0;
+            }
+            else {
+                return 0.8;
+            }
+        })
+            
+            
+        }
+        
+    function updateMe(i, data){
+        var circle = svg.selectAll("circle")
+        .data(data);
+        
+        var color;
+            if (i >= t.length){
+                color = "white";
+            }
+            else {
+                color = colorMe(t[i]);
+            }
+        
+        circle.transition()
+            .duration(500)
+            
+        
+        
+    }
+    
+    function colorMe(temp){
+        
+    var colors = d3.scaleQuantize()
+    .domain([-10,60])
+    .range(["#5E4FA2", "#3288BD", "#66C2A5", "#ABDDA4", "#E6F598", 
+    "#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F", "#9E0142"]);
+        
+    return colors(temp)
+    
+        
+    }
+        
+
+        
+    
+    
+    
+    
+    
+    
+    
+    
+    </script>
+    
+</div>
+    </body>
+
+</html>
