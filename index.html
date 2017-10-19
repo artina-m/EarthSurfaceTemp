@@ -3,6 +3,7 @@
 <head>
     <title>Earth Surface Temperature</title>
     <script src="https://d3js.org/d3.v4.min.js"></script>
+    <link rel = "stylesheet" type="text/css" href = "style.css">
     <style>
         @import url('https://fonts.googleapis.com/css?family=Roboto:Bold,Thin,Regular');
         #boroughs {
@@ -14,72 +15,82 @@
         body {
             margin: 0;
             padding: 0;
+            background-color: #151820
         }
-        .visualization {
-            width: 1000px;
-            height:1000px;
-            background: white;
     </style>
 </head>
     
+    
 <body>
-<div class = "viz">
+   
+<div class = "header" style = "text-align: left">
+    <p class = "h1"> 100 Years of </p>
+    <p class = "h2">Global Land Temperature</p>
+    <p class = "h3">From 1900 to 2000</p>
+</div>
+    
+    
+<div class = "viz" style = "text-align:center;" >
     <script>
         
-    var width = 600,
+    var width = 700,
     height = 400;
 
-    duration = 1000;
+    var duration = 1000;
         
-    // create svg variable
-    var svg = d3.select("body").append("svg")
-                    .attr("width", width)
-                    .attr("height", height);
-        
-    d3.select("body").append("input")
-    .attr("type", "range")
-    .attr("min", 0)
-    .attr("max", 5000)
-    .attr("value", duration)
-    .attr("class", "slider")
-    .on("change", function() { duration = this.value; });
+    // SVG Space
+    var svg = d3.select(".viz").append("svg")
+        .attr("width", width)
+        .attr("height", height);
 
-    // Store country and coordinate data in object
+        
+    function getTime(i){
+        var year = (1900 + Math.floor(i/4));
+        var q = (i % 4) + 1
+        t = String(year) + "Q" + String(q)
+        
+        return t
+    }
+
+    // Data: Geographical Coordinates -> Posistion on map 
     var countryData;
     var countryGeo = {};
     var allC;  
     
     function countryLine(line) {
         return {
-            
         country: line["name"],
         latitude: Number(line["latitude"]),
         longitude: Number(line["longitude"]),
-    };
-    }
+    }}
         
     d3.csv("CountryGeo.csv", countryLine, function(error,data){
         countryData = data;
         countryData.forEach(function(d){
-            countryGeo[d.country] = {lat: d.latitude, long: d.longitude, time: [], avgTemp: [], uncertainty: [], area: 0}
-        });
+            countryGeo[d.country] = {
+                name: d.country,
+                lat: d.latitude, 
+                long: d.longitude, 
+                tempData: {},
+                area: 0,
+        };
         allC = Object.keys(countryGeo)
+        });
     });
         
-    // Surface area data used for radius
-        
+    // Data: Surface Area -> Scaled radius
     var surfaceArea = {};
+    var sa;
+        
     function surfaceLine(line){
         return{
         country: line["Country Name"],
         surfaceA: Number(line["Surface Area"])
-            
-        };
-    }
+        }}
         
-    xScale = d3.scaleLinear()
-    .domain( [0,10000000] )
-    .range( [5,30] );
+    saScale = d3.scaleLinear() // Scale radius based on surface area
+        .domain( [0,10000000] )
+        .range( [2,20] );
         
      d3.csv("SurfaceAreaByCountry.csv", surfaceLine, function(error,data){
         sa = data;
@@ -88,29 +99,37 @@
         });
     });
                 
-    /////////////////////////////////////////////
-    // Store country temperature data and join with coordinate data
-        
-    var tempData;
-    var countryMap = [];
 
-        function parseLine(line) {
+                
+    var temp;
+    var countryMap = [];
+        
+    function parseLine(line) {
         return {
-            
-        timeFrame: line["dt"],
+        country: line["Country"],
+        year: Number(line["Year"]),
+        quarter: line["Quarter"],
         avgTemp: Number(line["AverageTemperature"]),
-        tempUncertainty: Number(line["AverageTemperatureUncertainty"]),
-        country: line["Country"]
     };
     }
         
-    d3.csv("globalData.csv", parseLine, function(error,data){
-        tempData = data;
-        tempData.forEach(function(d){
+    // Define the div for the tooltip
+        var div = d3.select("body").append("div")	
+    .attr("class", "tooltip")				
+    .style("opacity", 0);
+        
+    d3.csv("averageTempByCountry.csv", parseLine, function(error,data){
+        temp = data;
+        temp.forEach(function(d){
             c = String(d.country);
-            countryGeo[c].avgTemp = countryGeo[c].avgTemp.concat([d.avgTemp]);
-            countryGeo[c].time = countryGeo[c].time.concat([d.timeFrame]);
-            countryGeo[c].uncertainty = countryGeo[c].uncertainty.concat([d.tempUncertainty])
+            y = d.year;
+            if (y >= 1900){
+                
+                indx = y - 1900;
+                time = String(y) + d.quarter;
+                countryGeo[c].tempData[time] = d.avgTemp
+            }
+            
             var aVal = surfaceArea[c];
             if (aVal  != undefined){
             countryGeo[c].area = aVal.area;
@@ -122,13 +141,15 @@
             countryMap.push(countryGeo[c])
         }        
         
-        i = 28
         // set projection
         var projection = d3.geoMercator();
 
         // set projection parameters
-        projection.scale(80)
-        .translate([width / 2, height / 2]);
+        projection.scale(120)
+        .translate([width / 2, height / 2 + 50]);
+        
+        i = 2
+        yearQ = getTime(i);
         
         
         svg.selectAll("circle")
@@ -144,68 +165,83 @@
             var long = c.long;
             var lat = c.lat;
             return projection([long,lat])[1] })
-        .attr("r", function(c){
-            var val = xScale(c.area);
-            return val
+        .attr("r", function(d,i){
+            console.log(saScale(d.area))
+            return saScale(d.area)
         })
         .attr("fill", function(c){
-            var t = c.avgTemp;
+            var t = c.tempData[yearQ];
             var color;
-            if (i > t.length){
+            if (t == undefined){
                 return "white";
             }
             else {
-                return colorMe(t[i]);
+                return colorMe(t);
             }
         })
         .attr("opacity", function(c){
-            var t = c.avgTemp;
+            var t = c.tempData[yearQ];
             var color;
-            if (i > t.length){
+            if (t == undefined){
                 return 0;
             }
             else {
                 return 0.8;
             }
         })
+        .on("mouseover", function(d) {	
+            svg.append("text")
+            .text(d.name)
+            .attr("x", function(){
+                var long = d.long;
+                var lat = d.lat;
+                return projection([long,lat])[0] + 6
+            })
+            .attr("y", function(){
+                var long = d.long;
+                var lat = d.lat;
+                return projection([long,lat])[1] + 5
+            })	
+            .style("fill", "#E7E9EB")
+            .style("font-family", "Roboto")
+            .attr("class", "cName")
+            })					
+            .on("mouseout", function(d) {		
+            svg.selectAll(".cName")
+            .remove();
+            })
+        ;
         
-        time = countryMap[0].time[i]
-        svg.append("text")
-        .text(time)
-        .attr("x", 50)
-        .attr("y", 50)
         
+        time = yearQ
+        svg2.append("text")
+        .text(time[0] + time[1] + time[2] + time[3])
+        .attr("x", 20)
+        .attr("y", 12)
+        .attr("class", "year");
         
-        update(0);
-        d3.select(".slider").on("input", function() {
-            update(+this.value);
-         });
-        
-    })
+    });
     
-    # Wrong not consecutive years
-    get array of all dates
-    think about the data - maybe 6 intervals (12, 34, 56, 78, 910,1112) (?)
-                                    
-
+    
     function update(year){
-            
+        yearQ = getTime(year)
         svg.selectAll(".circle")
             .data(countryMap)
             .attr("fill", function(c){
-            var t = c.avgTemp;
+            var t = c.tempData[yearQ];
             var color;
-            if (year > t.length){
+            if ( t == undefined){
                 return "white";
             }
+        
             else {
-                return colorMe(t[year]);
+                return colorMe(t);
             }
         })
         .attr("opacity", function(c){
-            var t = c.avgTemp;
+            var t = c.tempData[yearQ];
             var color;
-            if (year >= t.length){
+            if (t == undefined){
                 return 0;
             }
             else {
@@ -213,57 +249,151 @@
             }
         })
         
-        time = countryMap[0].time[year]
+        time = yearQ
         
-        svg.selectAll("text")
-        .text(time);
+        svg2.select(".year")
+        .text(time[0] + time[1] + time[2] + time[3]);
             
         }
-        
-    function updateMe(i, data){
-        var circle = svg.selectAll("circle")
-        .data(data);
-        
-        var color;
-            if (i >= t.length){
-                color = "white";
-            }
-            else {
-                color = colorMe(t[i]);
-            }
-        
-        circle.transition()
-            .duration(500)
-            
-        
-        
-    }
+
     
     function colorMe(temp){
         
     var colors = d3.scaleQuantize()
-    .domain([-10,60])
-    .range(["#5E4FA2", "#3288BD", "#66C2A5", "#ABDDA4", "#E6F598", 
-    "#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F", "#9E0142"]);
+    .domain([-10,35])
+    .range([ "#3288bd","#99d594","#e6f598","#ffffbf", "#fee08b","#fc8d59","#d53e4f"])
         
     return colors(temp)
-    
+    };
         
-    }
+    i = 0;
+    var sim = setInterval(function() {
+       update(i);
+       i = i + 1;
+       if (i > 402){ i = 0;}
+       }, 100);
         
-
+    </script>
+</div>
+    
+<div class =  "legends">
+       
+    <script>
+        var width2 = 300;
+        var height2 = 100;
         
-    
-    
-    
-    
-    
-    
-    
+        // SVG Space
+        var svg2 = d3.select(".legends").append("svg")
+        .attr("width", width2)
+        .attr("height", height2)
+        
+        svg2.append("line")
+        .attr("x1", 22)
+        .attr("y1", 24)
+        .attr("x2", 250)
+        .attr("y2", 24)
+        .attr("stroke", "#6B6B6B");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 50)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#3288bd");
+        
+        svg2.append("text")
+        .text("< 0")
+        .attr("x", 25)
+        .attr("y",44)
+        .attr("fill", "#828282")
+        .style("font-size", 10).style("font-family", "Roboto");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 70)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#99d594");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 90)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#e6f598");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 110)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#ffffbf");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 130)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#fee08b");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 150)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#fc8d59");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 170)
+        .attr("cy",40)
+        .attr("r", 5)
+        .attr("fill", "#d53e4f");
+        
+         svg2.append("text")
+        .text("> 28 C")
+        .attr("x", 180)
+        .attr("y",44)
+        .attr("fill", "#828282")
+        .style("font-size", 10).style("font-family", "Roboto");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 95)
+        .attr("cy",65)
+        .attr("r", 2)
+        .attr("fill", "#828282");
+        
+        svg2.append("circle")
+        .attr("class", "circle")
+        .attr("cx", 110)
+        .attr("cy",65)
+        .attr("r", 6)
+        .attr("fill", "#828282");
+        
+         svg2.append("text")
+        .text("Surface Area")
+        .attr("x", 25)
+        .attr("y",70)
+        .attr("fill", "#828282")
+        .style("font-size", 10)
+        .style("font-family", "Roboto");
+        
+        svg2.append("text")
+        .text("Data Source: http://berkeleyearth.org/")
+        .attr("x", 25)
+        .attr("y",90)
+        .attr("fill", "#828282")
+        .style("font-size", 10)
+        .style("font-family", "Roboto");
+        
     
     </script>
     
 </div>
-    </body>
+    
+    
+    
+</body>
 
 </html>
